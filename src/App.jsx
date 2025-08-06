@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { DownloadIcon, UploadIcon } from "lucide-react";
+import { DownloadIcon, UploadIcon, RefreshCcw } from "lucide-react";
 
 export default function LeadsDashboard() {
   const [leads, setLeads] = useState([]);
   const [headers, setHeaders] = useState([]);
-  const [csvFile, setCsvFile] = useState(null);
 
   useEffect(() => {
     fetch("/most_recent_leads_with_hyperlinks.csv")
@@ -12,7 +11,7 @@ export default function LeadsDashboard() {
       .then((csv) => {
         const [headerLine, ...rows] = csv.trim().split("\n");
         const headerArr = headerLine.split(",");
-        const data = rows.map((row) => row.split(/,(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)/));
+        const data = rows.map((row) => row.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/));
         setHeaders(headerArr);
         setLeads(data);
       });
@@ -27,16 +26,25 @@ export default function LeadsDashboard() {
       const csv = event.target.result;
       const [headerLine, ...rows] = csv.trim().split("\n");
       const headerArr = headerLine.split(",");
-      const data = rows.map((row) => row.split(/,(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)/));
+      const data = rows.map((row) => row.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/));
       setHeaders(headerArr);
       setLeads(data);
     };
     reader.readAsText(file);
-    setCsvFile(file);
+  };
+
+  const triggerBackendRefresh = async () => {
+    try {
+      const res = await fetch("https://your-backend.onrender.com/generate-leads");
+      const data = await res.json();
+      alert(data.message || "Done!");
+    } catch (err) {
+      alert("Failed to trigger backend");
+    }
   };
 
   return (
-    <div className="p-4 space-y-4 font-sans">
+    <div className="p-4 space-y-4">
       <div className="flex justify-between items-center flex-wrap gap-2">
         <h1 className="text-2xl font-bold">Real-Time Leads</h1>
         <div className="flex gap-2">
@@ -48,15 +56,18 @@ export default function LeadsDashboard() {
             id="upload-input"
           />
           <label htmlFor="upload-input">
-            <button className="flex gap-2 items-center px-4 py-2 bg-black text-white rounded cursor-pointer">
+            <button className="flex gap-2 items-center px-4 py-2 bg-blue-600 text-white rounded">
               <UploadIcon className="w-4 h-4" /> Upload CSV
             </button>
           </label>
           <a href="/most_recent_leads_with_hyperlinks.csv" download>
-            <button className="flex gap-2 items-center px-4 py-2 bg-black text-white rounded">
+            <button className="flex gap-2 items-center px-4 py-2 bg-indigo-600 text-white rounded">
               <DownloadIcon className="w-4 h-4" /> Download CSV
             </button>
           </a>
+          <button onClick={triggerBackendRefresh} className="flex gap-2 items-center px-4 py-2 bg-green-600 text-white rounded">
+            <RefreshCcw className="w-4 h-4" /> Generate Leads
+          </button>
         </div>
       </div>
 
