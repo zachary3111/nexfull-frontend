@@ -35,7 +35,7 @@ export default function LeadsDashboard() {
 
   const triggerBackendRefresh = async () => {
     try {
-      const res = await fetch("https://nexfull.onrender.com");
+      const res = await fetch("https://nexfull.onrender.com/generate-leads");
       const data = await res.json();
       alert(data.message || "Done!");
     } catch (err) {
