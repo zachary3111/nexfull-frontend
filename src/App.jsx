@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { DownloadIcon, UploadIcon, RefreshCcw } from "lucide-react";
 
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
+
 export default function LeadsDashboard() {
   const [leads, setLeads] = useState([]);
   const [headers, setHeaders] = useState([]);
 
   useEffect(() => {
-    fetch("/most_recent_leads_with_hyperlinks.csv")
+    fetch(`${BACKEND_URL}/most_recent_leads_with_hyperlinks.csv`)
       .then((res) => res.text())
       .then((csv) => {
         const [headerLine, ...rows] = csv.trim().split("\n");
@@ -14,7 +16,8 @@ export default function LeadsDashboard() {
         const data = rows.map((row) => row.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/));
         setHeaders(headerArr);
         setLeads(data);
-      });
+      })
+      .catch((err) => console.error("CSV load failed:", err));
   }, []);
 
   const handleFileChange = (e) => {
@@ -35,11 +38,12 @@ export default function LeadsDashboard() {
 
   const triggerBackendRefresh = async () => {
     try {
-      const res = await fetch("https://nexfull-1.onrender.com/generate-leads");
+      const res = await fetch(`${BACKEND_URL}/generate-leads`);
       const data = await res.json();
       alert(data.message || "Done!");
     } catch (err) {
       alert("Failed to trigger backend");
+      console.error(err);
     }
   };
 
@@ -60,7 +64,7 @@ export default function LeadsDashboard() {
               <UploadIcon className="w-4 h-4" /> Upload CSV
             </button>
           </label>
-          <a href="/most_recent_leads_with_hyperlinks.csv" download>
+          <a href={`${BACKEND_URL}/most_recent_leads_with_hyperlinks.csv`} download>
             <button className="flex gap-2 items-center px-4 py-2 bg-indigo-600 text-white rounded">
               <DownloadIcon className="w-4 h-4" /> Download CSV
             </button>
