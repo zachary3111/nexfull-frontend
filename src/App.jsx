@@ -1,28 +1,23 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { DownloadIcon, UploadIcon, RefreshCcw, Search, Loader2, Moon, Sun } from "lucide-react";
+import { DownloadIcon, UploadIcon, RefreshCcw, Search, Loader2, Moon, Sun, LogOut } from "lucide-react";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "";
-const COL_P_INDEX = 15; // Column P = 16th col (0-based 15)
+const COL_P_INDEX = 15; // Column P = 16th column
 
-// ---- CSV helpers
+/* ---------- CSV helpers ---------- */
 function parseCsv(csv) {
   const lines = csv.replace(/^\uFEFF/, "").trim().split(/\r?\n/);
   if (!lines.length) return { headers: [], rows: [] };
-
-  // split respecting quotes
   const split = (line) =>
     line
       .match(/("([^"]|"")*"|[^,]*)/g)
       .filter(Boolean)
       .map((s) => s.replace(/^"(.*)"$/, "$1").replace(/""/g, '"').trim());
-
   let headers = split(lines[0]);
   let rows = lines.slice(1).map(split);
-
-  // remove column P from headers + rows
+  // remove column P client-side too (defensive)
   headers = headers.filter((_, i) => i !== COL_P_INDEX);
   rows = rows.map((r) => r.filter((_, i) => i !== COL_P_INDEX));
-
   return { headers, rows };
 }
 
@@ -41,7 +36,66 @@ function shortenUrl(url) {
   }
 }
 
-export default function LeadsDashboard() {
+/* ---------- Login ---------- */
+function Login({ onLogin }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setErr(""); setLoading(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/auth/login`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Login failed");
+      onLogin?.(data.user);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen grid place-items-center bg-neutral-900 text-neutral-100">
+      <form onSubmit={submit} className="w-full max-w-sm space-y-3 rounded-xl border border-neutral-800 bg-neutral-900 p-5">
+        <h1 className="text-lg font-semibold">Sign in</h1>
+        <input
+          className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 outline-none focus:border-neutral-600"
+          placeholder="Email"
+          autoComplete="username"
+          value={email}
+          onChange={(e)=>setEmail(e.target.value)}
+        />
+        <input
+          type="password"
+          className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 outline-none focus:border-neutral-600"
+          placeholder="Password"
+          autoComplete="current-password"
+          value={password}
+          onChange={(e)=>setPassword(e.target.value)}
+        />
+        {err && <div className="text-sm text-red-400">{err}</div>}
+        <button
+          disabled={loading}
+          className="w-full rounded-lg bg-emerald-600 py-2 text-sm font-medium hover:bg-emerald-700 disabled:opacity-60"
+        >
+          {loading ? "Signing in…" : "Log in"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+/* ---------- Dashboard ---------- */
+function LeadsDashboard({ onLogout }) {
   const [headers, setHeaders] = useState([]);
   const [leads, setLeads] = useState([]);
   const [query, setQuery] = useState("");
@@ -49,17 +103,16 @@ export default function LeadsDashboard() {
   const [errMsg, setErrMsg] = useState("");
   const [dark, setDark] = useState(true); // default dark
 
-  // keep <html class="dark"> in sync for Tailwind dark mode
   useEffect(() => {
     const root = document.documentElement;
     dark ? root.classList.add("dark") : root.classList.remove("dark");
   }, [dark]);
 
-  // Load from backend
+  // Load from backend (with cookie)
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch(`${BACKEND_URL}/most_recent_leads_with_hyperlinks.csv`);
+        const res = await fetch(`${BACKEND_URL}/most_recent_leads_with_hyperlinks.csv`, { credentials: "include" });
         if (!res.ok) throw new Error(`CSV HTTP ${res.status}`);
         const csv = await res.text();
         const { headers, rows } = parseCsv(csv);
@@ -98,13 +151,18 @@ export default function LeadsDashboard() {
 
   const triggerBackendRefresh = async () => {
     try {
-      const res = await fetch(`${BACKEND_URL}/generate-leads`);
+      const res = await fetch(`${BACKEND_URL}/generate-leads`, { credentials: "include" });
       const data = await res.json();
       alert(data.message || "Done!");
     } catch (err) {
       console.error(err);
       alert("Failed to trigger backend");
     }
+  };
+
+  const logout = async () => {
+    await fetch(`${BACKEND_URL}/auth/logout`, { method: "POST", credentials: "include" });
+    onLogout?.();
   };
 
   // Filter rows by query
@@ -131,6 +189,15 @@ export default function LeadsDashboard() {
               >
                 {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
                 {dark ? "Light" : "Dark"}
+              </button>
+
+              {/* Logout */}
+              <button
+                onClick={logout}
+                className="inline-flex items-center gap-2 rounded-xl border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-750"
+                title="Sign out"
+              >
+                <LogOut className="h-4 w-4" /> Logout
               </button>
 
               <label className="relative">
@@ -246,4 +313,28 @@ export default function LeadsDashboard() {
       </div>
     </div>
   );
+}
+
+/* ---------- App wrapper (auth gate) ---------- */
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${BACKEND_URL}/auth/me`, { credentials: "include" });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.authenticated) setUser(data.user);
+        }
+      } finally {
+        setChecking(false);
+      }
+    })();
+  }, []);
+
+  if (checking) return null;
+  if (!user) return <Login onLogin={setUser} />;
+  return <LeadsDashboard onLogout={() => (window.location.href = window.location.href)} />;
 }
