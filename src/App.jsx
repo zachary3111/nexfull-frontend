@@ -3,7 +3,6 @@ import { DownloadIcon, UploadIcon, RefreshCcw, Search, Loader2, Moon, Sun, LogOu
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "";
 const COL_P_INDEX = 15; // Column P = 16th column
-const TIMESTAMP_COLUMN_INDEX = 0; // Column A for timestamps
 
 /* ---------- CSV helpers ---------- */
 function parseCsv(csv) {
@@ -35,20 +34,6 @@ function shortenUrl(url) {
   } catch {
     return url.length > 28 ? url.slice(0, 28) + "…" : url;
   }
-}
-
-// Convert PH timestamp → UK time
-function convertToUKTime(str) {
-  const date = new Date(str);
-  if (isNaN(date.getTime())) return str; // not a valid date/time
-  return date.toLocaleString("en-GB", {
-    timeZone: "Europe/London",
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 /* ---------- Login ---------- */
@@ -293,14 +278,7 @@ function LeadsDashboard({ onLogout }) {
                     {headers.map((_, cIdx) => {
                       const cell = row[cIdx] ?? "";
                       const url = extractUrl(cell);
-
-                      let displayValue = cell;
-                      // Convert only if it's Column A and a valid date
-                      if (!url && cIdx === TIMESTAMP_COLUMN_INDEX && !isNaN(Date.parse(cell))) {
-                        displayValue = convertToUKTime(cell);
-                      }
-
-                      const label = url ? shortenUrl(url) : String(displayValue);
+                      const label = url ? shortenUrl(url) : String(cell);
 
                       return (
                         <td key={cIdx} className="px-3 py-2 align-top border-l border-neutral-800 first:border-l-0">
