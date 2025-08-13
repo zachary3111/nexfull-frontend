@@ -8,17 +8,17 @@
     <div className="p-6 text-sm text-red-400">{errMsg}</div>
   ) : (
     <table className="w-full text-sm border-collapse">
-      <thead className="sticky top-0 z-10 bg-neutral-850/95 backdrop-blur">
+      <thead className="sticky top-0 z-30 bg-neutral-850">
         <tr>
           <th
-            className="sticky left-0 z-20 w-14 px-2 py-2 text-right font-semibold text-neutral-300 bg-neutral-850 border-b border-neutral-800"
+            className="sticky left-0 top-0 z-40 w-14 px-2 py-2 text-right font-semibold text-neutral-300 bg-neutral-850 border-b border-neutral-800"
           >
             #
           </th>
           {headers.map((h, i) => (
             <th
               key={i}
-              className="px-3 py-2 text-left font-semibold text-neutral-300 border-b border-neutral-800 border-l first:border-l-0 whitespace-nowrap"
+              className="px-3 py-2 text-left font-semibold text-neutral-300 border-b border-neutral-800 border-l first:border-l-0 whitespace-nowrap bg-neutral-850"
               title={h}
             >
               {h}
@@ -28,9 +28,12 @@
       </thead>
       <tbody>
         {filtered.map((row, rIdx) => (
-          <tr key={rIdx} className={rIdx % 2 ? "bg-neutral-900" : "bg-neutral-950"}>
+          <tr
+            key={rIdx}
+            className={rIdx % 2 ? "bg-neutral-900" : "bg-neutral-950"}
+          >
             <td
-              className="sticky left-0 z-10 px-2 py-2 text-right text-neutral-500 tabular-nums bg-neutral-900 border-b border-neutral-800"
+              className="sticky left-0 z-20 px-2 py-2 text-right text-neutral-500 tabular-nums bg-neutral-900 border-b border-neutral-800"
             >
               {rIdx + 1}
             </td>
