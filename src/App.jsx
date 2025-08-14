@@ -482,15 +482,6 @@ function LeadsDashboard({ onLogout }) {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2">
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
-                  <span
-                    className={`text-2xl ${
-                      dark ? "text-gray-400" : "text-gray-500"
-                    }`}
-                  >
-                    🔍
-                  </span>
-                </div>
                 <input
                   type="text"
                   placeholder="Search companies, phones, postcodes, addresses..."
