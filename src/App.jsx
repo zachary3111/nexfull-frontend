@@ -21,7 +21,7 @@ function parseCsv(csv) {
       );
   let headers = split(lines[0]);
   let rows = lines.slice(1).map(split);
-  // remove column P client-side too (defensive)
+
   headers = headers.filter((_, i) => i !== COL_P_INDEX);
   rows = rows.map((r) => r.filter((_, i) => i !== COL_P_INDEX));
   return { headers, rows };
@@ -45,21 +45,17 @@ function shortenUrl(url) {
   }
 }
 
-/* ---------- Timezone conversion helpers ---------- */
 function convertPhilippinesToUK(dateTimeStr) {
   if (!dateTimeStr || typeof dateTimeStr !== "string") return dateTimeStr;
 
-  // Check if it looks like a date/time string
   const dateTimePattern = /^\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}:\d{2}$/;
   if (!dateTimePattern.test(dateTimeStr.trim())) return dateTimeStr;
 
   try {
-    // Parse the Philippines time string (format: M/D/YYYY H:MM:SS)
     const [datePart, timePart] = dateTimeStr.trim().split(/\s+/);
     const [month, day, year] = datePart.split("/");
     const [hour, minute, second] = timePart.split(":");
 
-    // Create date object in Philippines time (UTC+8)
     const philippinesDate = new Date(
       year,
       month - 1,
@@ -69,10 +65,8 @@ function convertPhilippinesToUK(dateTimeStr) {
       second
     );
 
-    // Convert to UK time (Philippines is UTC+8, UK is UTC+0/+1, so subtract 7 hours for BST)
     const ukDate = new Date(philippinesDate.getTime() - 7 * 60 * 60 * 1000);
 
-    // Format for display (DD/MM/YYYY HH:MM:SS)
     return ukDate.toLocaleString("en-GB", {
       day: "2-digit",
       month: "2-digit",
@@ -97,12 +91,10 @@ function isTimestampColumn(header, value) {
 
   if (!hasTimestampHeader) return false;
 
-  // Check if value looks like a timestamp
   const dateTimePattern = /^\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}:\d{2}$/;
   return dateTimePattern.test(String(value || "").trim());
 }
 
-// Industry type color mapping
 function getIndustryColor(industry) {
   const colors = {
     Hospitality: "bg-orange-100 text-orange-800 border-orange-200",
@@ -117,7 +109,6 @@ function getIndustryColor(industry) {
   return colors[industry] || "bg-slate-100 text-slate-800 border-slate-200";
 }
 
-// Phone number formatter
 function formatPhoneNumber(phone) {
   if (!phone) return "";
   const cleaned = String(phone).replace(/\D/g, "");
@@ -127,7 +118,6 @@ function formatPhoneNumber(phone) {
   return phone;
 }
 
-/* ---------- Login ---------- */
 function Login({ onLogin }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -157,7 +147,6 @@ function Login({ onLogin }) {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-violet-900 via-purple-900 to-indigo-900 relative overflow-hidden">
-      {/* Animated background elements */}
       <div className="absolute inset-0">
         <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
@@ -249,7 +238,6 @@ function LeadsDashboard({ onLogout }) {
     dark ? root.classList.add("dark") : root.classList.remove("dark");
   }, [dark]);
 
-  // Load from backend (with cookie)
   useEffect(() => {
     const load = async () => {
       try {
@@ -272,7 +260,6 @@ function LeadsDashboard({ onLogout }) {
     load();
   }, []);
 
-  // Upload local CSV
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -314,7 +301,6 @@ function LeadsDashboard({ onLogout }) {
     onLogout?.();
   };
 
-  // Get unique industries for filter
   const industries = useMemo(() => {
     const industryIndex = headers.indexOf("Industry Type");
     if (industryIndex === -1) return [];
@@ -324,11 +310,9 @@ function LeadsDashboard({ onLogout }) {
     return uniqueIndustries.sort();
   }, [headers, leads]);
 
-  // Filter and sort rows
   const filtered = useMemo(() => {
     let result = leads;
 
-    // Text search filter
     const q = query.trim().toLowerCase();
     if (q) {
       result = result.filter((row) =>
@@ -340,7 +324,6 @@ function LeadsDashboard({ onLogout }) {
       );
     }
 
-    // Industry filter
     if (selectedIndustry) {
       const industryIndex = headers.indexOf("Industry Type");
       if (industryIndex !== -1) {
@@ -350,7 +333,6 @@ function LeadsDashboard({ onLogout }) {
       }
     }
 
-    // Sorting
     if (sortBy) {
       const sortIndex = headers.indexOf(sortBy);
       if (sortIndex !== -1) {
@@ -383,7 +365,6 @@ function LeadsDashboard({ onLogout }) {
           : "bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50"
       }`}
     >
-      {/* Header */}
       <div
         className={`backdrop-blur-xl shadow-2xl border-b transition-all duration-500 ${
           dark
@@ -490,7 +471,6 @@ function LeadsDashboard({ onLogout }) {
         </div>
       </div>
 
-      {/* Filters Section */}
       <div className="max-w-7xl mx-auto px-6 py-8">
         <div
           className={`backdrop-blur-xl rounded-3xl shadow-2xl p-6 transition-all duration-500 ${
@@ -500,7 +480,6 @@ function LeadsDashboard({ onLogout }) {
           }`}
         >
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Search */}
             <div className="lg:col-span-2">
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
@@ -526,7 +505,6 @@ function LeadsDashboard({ onLogout }) {
               </div>
             </div>
 
-            {/* Industry Filter */}
             <div>
               <select
                 value={selectedIndustry}
@@ -547,7 +525,6 @@ function LeadsDashboard({ onLogout }) {
             </div>
           </div>
 
-          {/* Active filters display */}
           {(query || selectedIndustry) && (
             <div className="flex items-center space-x-3 mt-6 pt-6 border-t border-gray-200/50">
               <span
@@ -594,7 +571,6 @@ function LeadsDashboard({ onLogout }) {
         </div>
       </div>
 
-      {/* Table Section */}
       <div className="max-w-7xl mx-auto px-6 pb-12">
         <div
           className={`backdrop-blur-xl rounded-3xl shadow-2xl overflow-hidden transition-all duration-500 ${
@@ -716,7 +692,6 @@ function LeadsDashboard({ onLogout }) {
                         const isIndustry = header === "Industry Type";
                         const isPhone = header.toLowerCase().includes("phone");
 
-                        // Convert timestamp if it's a timestamp column
                         const displayValue = isTimestamp
                           ? convertPhilippinesToUK(cell)
                           : cell;
@@ -736,9 +711,6 @@ function LeadsDashboard({ onLogout }) {
                                 className="inline-flex items-center space-x-2 px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-xl hover:from-blue-600 hover:to-purple-600 transition-all font-semibold shadow-lg hover:scale-105 group"
                                 title={String(cell)}
                               >
-                                <span className="group-hover:rotate-12 transition-transform">
-                                  🔗
-                                </span>
                                 <span>{label}</span>
                               </a>
                             ) : isIndustry ? (
@@ -820,7 +792,6 @@ function LeadsDashboard({ onLogout }) {
           )}
         </div>
 
-        {/* Stats and Footer */}
         {filtered.length > 0 && (
           <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
             <div
@@ -919,29 +890,28 @@ function LeadsDashboard({ onLogout }) {
   );
 }
 
-/* ---------- App wrapper (auth gate) ---------- */
 export default function App() {
-  // const [user, setUser] = useState(null);
-  // const [checking, setChecking] = useState(true);
+  const [user, setUser] = useState(null);
+  const [checking, setChecking] = useState(true);
 
-  // useEffect(() => {
-  //   (async () => {
-  //     try {
-  //       const res = await fetch(`${BACKEND_URL}/auth/me`, {
-  //         credentials: "include",
-  //       });
-  //       if (res.ok) {
-  //         const data = await res.json();
-  //         if (data.authenticated) setUser(data.user);
-  //       }
-  //     } finally {
-  //       setChecking(false);
-  //     }
-  //   })();
-  // }, []);
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${BACKEND_URL}/auth/me`, {
+          credentials: "include",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.authenticated) setUser(data.user);
+        }
+      } finally {
+        setChecking(false);
+      }
+    })();
+  }, []);
 
-  // if (checking) return null;
-  // if (!user) return <Login onLogin={setUser} />;
+  if (checking) return null;
+  if (!user) return <Login onLogin={setUser} />;
   return (
     <LeadsDashboard
       onLogout={() => (window.location.href = window.location.href)}
