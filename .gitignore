@@ -1,0 +1,52 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Testing
+coverage
+__tests__
+*.test.js
+*.spec.js
+
+# Production
+dist
+build
+dist-ssr
+*.local
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Cache
+.cache
+.eslintcache
+.stylelintcache
+
+# Misc
+.temp
+.tmp
+.sass-cache
+*.pem
+.vercel

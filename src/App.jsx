@@ -1,18 +1,24 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { DownloadIcon, UploadIcon, RefreshCcw, Search, Loader2, Moon, Sun, LogOut } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "";
-const COL_P_INDEX = 15; // Column P = 16th column
+const COL_P_INDEX = 15;
 
-/* ---------- CSV helpers ---------- */
 function parseCsv(csv) {
-  const lines = csv.replace(/^\uFEFF/, "").trim().split(/\r?\n/);
+  const lines = csv
+    .replace(/^\uFEFF/, "")
+    .trim()
+    .split(/\r?\n/);
   if (!lines.length) return { headers: [], rows: [] };
   const split = (line) =>
     line
       .match(/("([^"]|"")*"|[^,]*)/g)
       .filter(Boolean)
-      .map((s) => s.replace(/^"(.*)"$/, "$1").replace(/""/g, '"').trim());
+      .map((s) =>
+        s
+          .replace(/^"(.*)"$/, "$1")
+          .replace(/""/g, '"')
+          .trim()
+      );
   let headers = split(lines[0]);
   let rows = lines.slice(1).map(split);
   // remove column P client-side too (defensive)
@@ -25,15 +31,100 @@ function extractUrl(text) {
   const m = String(text || "").match(/https?:\/\/[^\s)",]+/i);
   return m ? m[0] : null;
 }
+
 function shortenUrl(url) {
   try {
     const u = new URL(url);
     const host = u.hostname.replace(/^www\./, "");
     const path = u.pathname.replace(/\/$/, "");
-    return path && path !== "/" ? `${host}${path.length > 24 ? path.slice(0, 24) + "…" : path}` : host;
+    return path && path !== "/"
+      ? `${host}${path.length > 24 ? path.slice(0, 24) + "…" : path}`
+      : host;
   } catch {
     return url.length > 28 ? url.slice(0, 28) + "…" : url;
   }
+}
+
+/* ---------- Timezone conversion helpers ---------- */
+function convertPhilippinesToUK(dateTimeStr) {
+  if (!dateTimeStr || typeof dateTimeStr !== "string") return dateTimeStr;
+
+  // Check if it looks like a date/time string
+  const dateTimePattern = /^\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}:\d{2}$/;
+  if (!dateTimePattern.test(dateTimeStr.trim())) return dateTimeStr;
+
+  try {
+    // Parse the Philippines time string (format: M/D/YYYY H:MM:SS)
+    const [datePart, timePart] = dateTimeStr.trim().split(/\s+/);
+    const [month, day, year] = datePart.split("/");
+    const [hour, minute, second] = timePart.split(":");
+
+    // Create date object in Philippines time (UTC+8)
+    const philippinesDate = new Date(
+      year,
+      month - 1,
+      day,
+      hour,
+      minute,
+      second
+    );
+
+    // Convert to UK time (Philippines is UTC+8, UK is UTC+0/+1, so subtract 7 hours for BST)
+    const ukDate = new Date(philippinesDate.getTime() - 7 * 60 * 60 * 1000);
+
+    // Format for display (DD/MM/YYYY HH:MM:SS)
+    return ukDate.toLocaleString("en-GB", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+  } catch (error) {
+    console.warn("Failed to convert timestamp:", dateTimeStr, error);
+    return dateTimeStr;
+  }
+}
+
+function isTimestampColumn(header, value) {
+  const timestampHeaders = ["timestamp", "time", "date", "created", "updated"];
+  const headerLower = (header || "").toLowerCase();
+  const hasTimestampHeader = timestampHeaders.some((keyword) =>
+    headerLower.includes(keyword)
+  );
+
+  if (!hasTimestampHeader) return false;
+
+  // Check if value looks like a timestamp
+  const dateTimePattern = /^\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}:\d{2}$/;
+  return dateTimePattern.test(String(value || "").trim());
+}
+
+// Industry type color mapping
+function getIndustryColor(industry) {
+  const colors = {
+    Hospitality: "bg-orange-100 text-orange-800 border-orange-200",
+    Miscellaneous: "bg-purple-100 text-purple-800 border-purple-200",
+    Technology: "bg-blue-100 text-blue-800 border-blue-200",
+    Healthcare: "bg-green-100 text-green-800 border-green-200",
+    Finance: "bg-emerald-100 text-emerald-800 border-emerald-200",
+    Education: "bg-indigo-100 text-indigo-800 border-indigo-200",
+    Retail: "bg-pink-100 text-pink-800 border-pink-200",
+    Manufacturing: "bg-gray-100 text-gray-800 border-gray-200",
+  };
+  return colors[industry] || "bg-slate-100 text-slate-800 border-slate-200";
+}
+
+// Phone number formatter
+function formatPhoneNumber(phone) {
+  if (!phone) return "";
+  const cleaned = String(phone).replace(/\D/g, "");
+  if (cleaned.length === 11 && cleaned.startsWith("0")) {
+    return `${cleaned.slice(0, 5)} ${cleaned.slice(5, 8)} ${cleaned.slice(8)}`;
+  }
+  return phone;
 }
 
 /* ---------- Login ---------- */
@@ -45,7 +136,8 @@ function Login({ onLogin }) {
 
   const submit = async (e) => {
     e.preventDefault();
-    setErr(""); setLoading(true);
+    setErr("");
+    setLoading(true);
     try {
       const res = await fetch(`${BACKEND_URL}/auth/login`, {
         method: "POST",
@@ -64,32 +156,78 @@ function Login({ onLogin }) {
   };
 
   return (
-    <div className="min-h-screen grid place-items-center bg-neutral-900 text-neutral-100">
-      <form onSubmit={submit} className="w-full max-w-sm space-y-3 rounded-xl border border-neutral-800 bg-neutral-900 p-5">
-        <h1 className="text-lg font-semibold">Sign in</h1>
-        <input
-          className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 outline-none focus:border-neutral-600"
-          placeholder="Email"
-          autoComplete="username"
-          value={email}
-          onChange={(e)=>setEmail(e.target.value)}
-        />
-        <input
-          type="password"
-          className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 outline-none focus:border-neutral-600"
-          placeholder="Password"
-          autoComplete="current-password"
-          value={password}
-          onChange={(e)=>setPassword(e.target.value)}
-        />
-        {err && <div className="text-sm text-red-400">{err}</div>}
-        <button
-          disabled={loading}
-          className="w-full rounded-lg bg-emerald-600 py-2 text-sm font-medium hover:bg-emerald-700 disabled:opacity-60"
-        >
-          {loading ? "Signing in…" : "Log in"}
-        </button>
-      </form>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-violet-900 via-purple-900 to-indigo-900 relative overflow-hidden">
+      {/* Animated background elements */}
+      <div className="absolute inset-0">
+        <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
+      </div>
+
+      <div className="w-full max-w-md relative z-10">
+        <div className="bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl border-white/20 p-10">
+          <div className="text-center mb-10">
+            <div className="w-20 h-20 bg-gradient-to-br from-blue-400 to-purple-500 rounded-2xl flex items-center justify-center shadow-2xl mx-auto mb-6 animate-bounce">
+              <span className="text-white font-bold text-3xl">📊</span>
+            </div>
+            <h1 className="text-4xl font-bold text-white mb-3">Welcome Back</h1>
+            <p className="text-white/80 text-lg">
+              Access your leads command center
+            </p>
+          </div>
+
+          <div className="space-y-6">
+            <div className="relative">
+              <label className="block text-white/90 text-sm font-semibold mb-3">
+                Email Address
+              </label>
+              <input
+                type="email"
+                className="w-full px-5 py-4 rounded-2xl bg-white/10 border-white/20 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all duration-300 backdrop-blur-sm"
+                placeholder="your@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+
+            <div className="relative">
+              <label className="block text-white/90 text-sm font-semibold mb-3">
+                Password
+              </label>
+              <input
+                type="password"
+                className="w-full px-5 py-4 rounded-2xl bg-white/10 border-white/20 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all duration-300 backdrop-blur-sm"
+                placeholder="••••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+
+            {err && (
+              <div className="bg-red-500/20 border-red-400/50 rounded-2xl px-5 py-4 text-red-200 backdrop-blur-sm animate-shake">
+                <div className="flex items-center space-x-2">
+                  <span>⚠️</span>
+                  <span>{err}</span>
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={submit}
+              disabled={loading}
+              className="w-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 text-white font-bold py-4 rounded-2xl hover:from-blue-600 hover:via-purple-600 hover:to-pink-600 transition-all duration-300 disabled:opacity-50 shadow-2xl transform hover:scale-105"
+            >
+              {loading ? (
+                <div className="flex items-center justify-center space-x-2">
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  <span>Signing in...</span>
+                </div>
+              ) : (
+                "Sign In"
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -101,7 +239,10 @@ function LeadsDashboard({ onLogout }) {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [errMsg, setErrMsg] = useState("");
-  const [dark, setDark] = useState(true); // default dark
+  const [dark, setDark] = useState(false);
+  const [selectedIndustry, setSelectedIndustry] = useState("");
+  const [sortBy, setSortBy] = useState("");
+  const [sortDesc, setSortDesc] = useState(false);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -112,7 +253,10 @@ function LeadsDashboard({ onLogout }) {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch(`${BACKEND_URL}/most_recent_leads_with_hyperlinks.csv`, { credentials: "include" });
+        const res = await fetch(
+          `${BACKEND_URL}/most_recent_leads_with_hyperlinks.csv`,
+          { credentials: "include" }
+        );
         if (!res.ok) throw new Error(`CSV HTTP ${res.status}`);
         const csv = await res.text();
         const { headers, rows } = parseCsv(csv);
@@ -151,7 +295,9 @@ function LeadsDashboard({ onLogout }) {
 
   const triggerBackendRefresh = async () => {
     try {
-      const res = await fetch(`${BACKEND_URL}/generate-leads`, { credentials: "include" });
+      const res = await fetch(`${BACKEND_URL}/generate-leads`, {
+        credentials: "include",
+      });
       const data = await res.json();
       alert(data.message || "Done!");
     } catch (err) {
@@ -161,155 +307,613 @@ function LeadsDashboard({ onLogout }) {
   };
 
   const logout = async () => {
-    await fetch(`${BACKEND_URL}/auth/logout`, { method: "POST", credentials: "include" });
+    await fetch(`${BACKEND_URL}/auth/logout`, {
+      method: "POST",
+      credentials: "include",
+    });
     onLogout?.();
   };
 
-  // Filter rows by query
+  // Get unique industries for filter
+  const industries = useMemo(() => {
+    const industryIndex = headers.indexOf("Industry Type");
+    if (industryIndex === -1) return [];
+    const uniqueIndustries = [
+      ...new Set(leads.map((row) => row[industryIndex]).filter(Boolean)),
+    ];
+    return uniqueIndustries.sort();
+  }, [headers, leads]);
+
+  // Filter and sort rows
   const filtered = useMemo(() => {
+    let result = leads;
+
+    // Text search filter
     const q = query.trim().toLowerCase();
-    if (!q) return leads;
-    return leads.filter((row) => row.some((c) => String(c || "").toLowerCase().includes(q)));
-  }, [leads, query]);
+    if (q) {
+      result = result.filter((row) =>
+        row.some((c) =>
+          String(c || "")
+            .toLowerCase()
+            .includes(q)
+        )
+      );
+    }
+
+    // Industry filter
+    if (selectedIndustry) {
+      const industryIndex = headers.indexOf("Industry Type");
+      if (industryIndex !== -1) {
+        result = result.filter(
+          (row) => row[industryIndex] === selectedIndustry
+        );
+      }
+    }
+
+    // Sorting
+    if (sortBy) {
+      const sortIndex = headers.indexOf(sortBy);
+      if (sortIndex !== -1) {
+        result = [...result].sort((a, b) => {
+          const aVal = String(a[sortIndex] || "");
+          const bVal = String(b[sortIndex] || "");
+          const comparison = aVal.localeCompare(bVal);
+          return sortDesc ? -comparison : comparison;
+        });
+      }
+    }
+
+    return result;
+  }, [leads, query, selectedIndustry, headers, sortBy, sortDesc]);
+
+  const handleSort = (header) => {
+    if (sortBy === header) {
+      setSortDesc(!sortDesc);
+    } else {
+      setSortBy(header);
+      setSortDesc(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-neutral-900 text-neutral-100">
-      {/* Top bar */}
-      <div className="sticky top-0 z-20 border-b border-neutral-800 bg-neutral-900/80 backdrop-blur">
-        <div className="mx-auto max-w-7xl px-4 py-3">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">Real-Time Leads</h1>
+    <div
+      className={`min-h-screen transition-all duration-500 ${
+        dark
+          ? "bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900"
+          : "bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50"
+      }`}
+    >
+      {/* Header */}
+      <div
+        className={`backdrop-blur-xl shadow-2xl border-b transition-all duration-500 ${
+          dark
+            ? "bg-slate-800/50 border-slate-700"
+            : "bg-white/80 border-gray-200/50"
+        }`}
+      >
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center space-x-6">
+              <div>
+                <h1 className={`text-5xl font-black bg-gradient-to-r `}>
+                  Real-Time Leads
+                </h1>
+                <div className="flex items-center space-x-4 mt-2">
+                  <div
+                    className={`px-4 py-2 rounded-full font-bold text-sm ${
+                      dark
+                        ? "bg-blue-500/20 text-blue-300"
+                        : "bg-blue-100 text-blue-800"
+                    }`}
+                  >
+                    {filtered.length.toLocaleString()} leads
+                  </div>
+                  <div
+                    className={`px-4 py-2 rounded-full font-bold text-sm ${
+                      dark
+                        ? "bg-green-500/20 text-green-300"
+                        : "bg-green-100 text-green-800"
+                    }`}
+                  >
+                    🇬🇧 UK Timezone
+                  </div>
+                  {selectedIndustry && (
+                    <div
+                      className={`px-4 py-2 rounded-full font-bold text-sm ${getIndustryColor(
+                        selectedIndustry
+                      )}`}
+                    >
+                      {selectedIndustry}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Theme toggle */}
-              <button
-                onClick={() => setDark((v) => !v)}
-                className="inline-flex items-center gap-2 rounded-xl border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-750"
-                title="Toggle theme"
+            <div className="flex items-center space-x-3">
+              {/* <button
+                onClick={() => setDark(!dark)}
+                className={`px-5 py-3 backdrop-blur rounded-2xl font-semibold transition-all hover:scale-105 shadow-lg ${
+                  dark
+                    ? "bg-slate-700/60 border-slate-600 text-white hover:bg-slate-600/60"
+                    : "bg-white/60 border-gray-200 text-gray-700 hover:bg-white/80"
+                }`}
               >
-                {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-                {dark ? "Light" : "Dark"}
-              </button>
+                {dark ? "☀️ Light" : "🌙 Dark"}
+              </button> */}
 
-              {/* Logout */}
               <button
                 onClick={logout}
-                className="inline-flex items-center gap-2 rounded-xl border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-750"
-                title="Sign out"
+                className={`px-5 py-3 border-0 bg-transparent font-semibold hover:scale-105 `}
               >
-                <LogOut className="h-4 w-4" /> Logout
+                🚪 Logout
               </button>
 
-              <label className="relative">
+              <label className="relative cursor-pointer group">
                 <input
                   type="file"
                   accept=".csv"
                   onChange={handleFileChange}
-                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 />
-                <span className="inline-flex items-center gap-2 rounded-xl border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-750">
-                  <UploadIcon className="h-4 w-4" /> Upload CSV
-                </span>
+                <div
+                  className={`px-5 py-3 backdrop-blur rounded-2xl font-semibold transition-all group-hover:scale-105 shadow-lg ${
+                    dark
+                      ? "bg-slate-700/60 border-slate-600 text-white hover:bg-slate-600/60"
+                      : "bg-white/60 border-gray-200 text-gray-700 hover:bg-white/80"
+                  }`}
+                >
+                  📁 Upload CSV
+                </div>
               </label>
 
               <a
                 href={`${BACKEND_URL}/most_recent_leads_with_hyperlinks.csv`}
                 download
-                className="inline-flex items-center gap-2 rounded-xl border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-750"
+                className={`px-5 py-3 backdrop-blur rounded-2xl font-semibold transition-all hover:scale-105 shadow-lg ${
+                  dark
+                    ? "bg-slate-700/60 border-slate-600 text-white hover:bg-slate-600/60"
+                    : "bg-white/60 border-gray-200 text-gray-700 hover:bg-white/80"
+                }`}
               >
-                <DownloadIcon className="h-4 w-4" /> Download CSV
+                💾 Download
               </a>
 
               <button
                 onClick={triggerBackendRefresh}
-                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-sm text-white hover:bg-emerald-700"
+                className="px-6 py-3 border-0 bg-transparent hover:scale-105"
               >
-                <RefreshCcw className="h-4 w-4" /> Generate Leads
+                ⚡ Generate Leads
               </button>
             </div>
-          </div>
-
-          {/* Search */}
-          <div className="mt-3 flex items-center gap-2">
-            <div className="relative w-full sm:w-96">
-              <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search any column…"
-                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-8 py-2 text-sm placeholder:text-neutral-500 focus:border-neutral-600 outline-none"
-              />
-            </div>
-            <div className="ml-auto text-xs text-neutral-400">{filtered.length.toLocaleString()} rows</div>
           </div>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="mx-auto max-w-7xl px-4 py-4">
-        <div className="overflow-auto rounded-xl border border-neutral-800 bg-neutral-900 shadow-sm max-h-[80vh]">
+      {/* Filters Section */}
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        <div
+          className={`backdrop-blur-xl rounded-3xl shadow-2xl p-6 transition-all duration-500 ${
+            dark
+              ? "bg-slate-800/50 border-slate-700"
+              : "bg-white/70 border-white/50"
+          }`}
+        >
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Search */}
+            <div className="lg:col-span-2">
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
+                  <span
+                    className={`text-2xl ${
+                      dark ? "text-gray-400" : "text-gray-500"
+                    }`}
+                  >
+                    🔍
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search companies, phones, postcodes, addresses..."
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  className={`w-full pl-14 pr-6 py-4 rounded-2xl border-2 font-medium focus:outline-none focus:ring-4 transition-all duration-300 ${
+                    dark
+                      ? "bg-slate-700/50 border-slate-600 text-white placeholder-gray-400 focus:ring-blue-500/30 focus:border-blue-400"
+                      : "bg-white/50 border-gray-200 text-gray-900 placeholder-gray-500 focus:ring-blue-500/20 focus:border-blue-500"
+                  }`}
+                />
+              </div>
+            </div>
+
+            {/* Industry Filter */}
+            <div>
+              <select
+                value={selectedIndustry}
+                onChange={(e) => setSelectedIndustry(e.target.value)}
+                className={`w-full px-5 py-4 rounded-2xl border-2 font-medium focus:outline-none focus:ring-4 transition-all duration-300 ${
+                  dark
+                    ? "bg-slate-700/50 border-slate-600 text-white focus:ring-purple-500/30 focus:border-purple-400"
+                    : "bg-white/50 border-gray-200 text-gray-900 focus:ring-purple-500/20 focus:border-purple-500"
+                }`}
+              >
+                <option value="">🏢 All Industries</option>
+                {industries.map((industry) => (
+                  <option key={industry} value={industry}>
+                    {industry}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Active filters display */}
+          {(query || selectedIndustry) && (
+            <div className="flex items-center space-x-3 mt-6 pt-6 border-t border-gray-200/50">
+              <span
+                className={`font-semibold ${
+                  dark ? "text-gray-300" : "text-gray-700"
+                }`}
+              >
+                Active filters:
+              </span>
+              {query && (
+                <div
+                  className={`px-4 py-2 rounded-full text-sm font-medium flex items-center space-x-2 ${
+                    dark
+                      ? "bg-blue-500/20 text-blue-300"
+                      : "bg-blue-100 text-blue-800"
+                  }`}
+                >
+                  <span>Search: "{query}"</span>
+                  <button
+                    onClick={() => setQuery("")}
+                    className="hover:bg-blue-500/20 rounded-full p-1"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+              {selectedIndustry && (
+                <div
+                  className={`px-4 py-2 rounded-full text-sm font-medium flex items-center space-x-2 ${getIndustryColor(
+                    selectedIndustry
+                  )}`}
+                >
+                  <span>{selectedIndustry}</span>
+                  <button
+                    onClick={() => setSelectedIndustry("")}
+                    className="hover:bg-black/10 rounded-full p-1"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Table Section */}
+      <div className="max-w-7xl mx-auto px-6 pb-12">
+        <div
+          className={`backdrop-blur-xl rounded-3xl shadow-2xl overflow-hidden transition-all duration-500 ${
+            dark
+              ? "bg-slate-800/50 border-slate-700"
+              : "bg-white/70 border-white/50"
+          }`}
+        >
           {loading ? (
-            <div className="flex items-center justify-center gap-2 p-10 text-neutral-400">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading…
+            <div className="flex items-center justify-center py-20">
+              <div className="text-center">
+                <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-6 animate-spin"></div>
+                <h3
+                  className={`text-xl font-bold mb-2 ${
+                    dark ? "text-white" : "text-gray-900"
+                  }`}
+                >
+                  Loading your leads...
+                </h3>
+                <p className={`${dark ? "text-gray-400" : "text-gray-600"}`}>
+                  Fetching the latest data from your sources
+                </p>
+              </div>
             </div>
           ) : errMsg ? (
-            <div className="p-6 text-sm text-red-400">{errMsg}</div>
+            <div className="p-20 text-center">
+              <div className="text-8xl mb-6">💥</div>
+              <h3 className="text-2xl font-bold text-red-500 mb-4">
+                Oops! Something went wrong
+              </h3>
+              <p
+                className={`text-lg ${
+                  dark ? "text-gray-400" : "text-gray-600"
+                }`}
+              >
+                {errMsg}
+              </p>
+            </div>
           ) : (
-            <table className="w-full table-fixed text-sm">
-              <thead className="sticky top-0 z-10 bg-neutral-850/95 backdrop-blur">
-                <tr>
-                  <th className="w-14 px-2 py-2 text-right font-semibold text-neutral-300">#</th>
-                  {headers.map((h, i) => (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr
+                    className={`border-b-2 transition-all duration-500 ${
+                      dark
+                        ? "bg-slate-700/50 border-slate-600"
+                        : "bg-gradient-to-r from-gray-50 to-blue-50 border-gray-200"
+                    }`}
+                  >
                     <th
-                      key={i}
-                      className="px-3 py-2 text-left font-semibold text-neutral-300 border-l border-neutral-800 first:border-l-0"
-                      title={h}
+                      className={`px-6 py-6 text-left text-sm font-bold uppercase tracking-wider ${
+                        dark ? "text-gray-300" : "text-gray-700"
+                      }`}
                     >
-                      <div className="line-clamp-1">{h}</div>
+                      #
                     </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-800">
-                {filtered.map((row, rIdx) => (
-                  <tr key={rIdx} className={rIdx % 2 ? "bg-neutral-900" : "bg-neutral-950"}>
-                    <td className="px-2 py-2 text-right text-neutral-500 tabular-nums">{rIdx + 1}</td>
-                    {headers.map((_, cIdx) => {
-                      const cell = row[cIdx] ?? "";
-                      const url = extractUrl(cell);
-                      const label = url ? shortenUrl(url) : String(cell);
-
+                    {headers.map((h, i) => {
+                      const isTimestamp = isTimestampColumn(h, "");
+                      const isActive = sortBy === h;
                       return (
-                        <td key={cIdx} className="px-3 py-2 align-top border-l border-neutral-800 first:border-l-0">
-                          {url ? (
-                            <a
-                              href={url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex max-w-[24rem] items-center gap-1 rounded-md px-2 py-1 text-blue-300 underline decoration-1 underline-offset-2 hover:text-blue-200"
-                              title={String(cell)}
-                            >
-                              {label}
-                            </a>
-                          ) : (
-                            <div className="max-w-[28rem] break-words text-neutral-200" title={String(cell)}>
-                              <span className="line-clamp-3">{label}</span>
-                            </div>
-                          )}
-                        </td>
+                        <th
+                          key={i}
+                          className={`px-6 py-6 text-left text-sm font-bold uppercase tracking-wider cursor-pointer hover:bg-black/5 transition-all ${
+                            dark
+                              ? "text-gray-300 hover:bg-white/5"
+                              : "text-gray-700"
+                          } ${isActive ? "bg-blue-50" : ""}`}
+                          onClick={() => handleSort(h)}
+                        >
+                          <div className="flex items-center space-x-2">
+                            {isTimestamp && (
+                              <span className="text-green-500">🕒</span>
+                            )}
+                            <span>{isTimestamp ? `${h} (UK)` : h}</span>
+                            {isActive && (
+                              <span className="text-blue-500">
+                                {sortDesc ? "↓" : "↑"}
+                              </span>
+                            )}
+                          </div>
+                        </th>
                       );
                     })}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-200/50">
+                  {filtered.map((row, rIdx) => (
+                    <tr
+                      key={rIdx}
+                      className={`transition-all duration-300 hover:scale-[1.01] hover:shadow-lg ${
+                        rIdx % 2 === 0
+                          ? dark
+                            ? "bg-slate-800/30 hover:bg-slate-700/50"
+                            : "bg-white/50 hover:bg-blue-50/80"
+                          : dark
+                          ? "bg-slate-700/30 hover:bg-slate-600/50"
+                          : "bg-gray-50/30 hover:bg-blue-50/80"
+                      }`}
+                    >
+                      <td
+                        className={`px-6 py-5 text-sm font-bold ${
+                          dark ? "text-gray-300" : "text-gray-900"
+                        }`}
+                      >
+                        <div
+                          className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
+                            dark
+                              ? "bg-slate-600 text-white"
+                              : "bg-gray-100 text-gray-700"
+                          }`}
+                        >
+                          {rIdx + 1}
+                        </div>
+                      </td>
+                      {headers.map((header, cIdx) => {
+                        const cell = row[cIdx] ?? "";
+                        const url = extractUrl(cell);
+                        const isTimestamp = isTimestampColumn(header, cell);
+                        const isIndustry = header === "Industry Type";
+                        const isPhone = header.toLowerCase().includes("phone");
+
+                        // Convert timestamp if it's a timestamp column
+                        const displayValue = isTimestamp
+                          ? convertPhilippinesToUK(cell)
+                          : cell;
+                        const label = url
+                          ? shortenUrl(url)
+                          : isPhone
+                          ? formatPhoneNumber(displayValue)
+                          : String(displayValue);
+
+                        return (
+                          <td key={cIdx} className="px-6 py-5 align-top">
+                            {url ? (
+                              <a
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center space-x-2 px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-xl hover:from-blue-600 hover:to-purple-600 transition-all font-semibold shadow-lg hover:scale-105 group"
+                                title={String(cell)}
+                              >
+                                <span className="group-hover:rotate-12 transition-transform">
+                                  🔗
+                                </span>
+                                <span>{label}</span>
+                              </a>
+                            ) : isIndustry ? (
+                              <div
+                                className={`inline-flex items-center px-3 py-2 rounded-xl font-semibold text-sm ${getIndustryColor(
+                                  displayValue
+                                )}`}
+                              >
+                                {displayValue}
+                              </div>
+                            ) : (
+                              <div
+                                className={`text-sm ${
+                                  isTimestamp
+                                    ? `inline-flex items-center px-3 py-2 rounded-xl font-bold shadow-lg ${
+                                        dark
+                                          ? "bg-green-500/20 text-green-300"
+                                          : "bg-green-100 text-green-800"
+                                      }`
+                                    : isPhone
+                                    ? `font-mono font-semibold ${
+                                        dark ? "text-blue-300" : "text-blue-700"
+                                      }`
+                                    : dark
+                                    ? "text-gray-300"
+                                    : "text-gray-900"
+                                }`}
+                                title={String(displayValue)}
+                              >
+                                {label}
+                              </div>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {filtered.length === 0 && !loading && !errMsg && (
+            <div className="text-center py-20">
+              <div className="text-8xl mb-6">🔍</div>
+              <h3
+                className={`text-2xl font-bold mb-4 ${
+                  dark ? "text-white" : "text-gray-700"
+                }`}
+              >
+                No leads found
+              </h3>
+              <p
+                className={`text-lg ${
+                  dark ? "text-gray-400" : "text-gray-500"
+                }`}
+              >
+                Try adjusting your search criteria or filters
+              </p>
+              <div className="mt-6 flex justify-center space-x-4">
+                {query && (
+                  <button
+                    onClick={() => setQuery("")}
+                    className="px-6 py-3 bg-blue-500 text-white rounded-xl font-semibold hover:bg-blue-600 transition-all"
+                  >
+                    Clear search
+                  </button>
+                )}
+                {selectedIndustry && (
+                  <button
+                    onClick={() => setSelectedIndustry("")}
+                    className="px-6 py-3 bg-purple-500 text-white rounded-xl font-semibold hover:bg-purple-600 transition-all"
+                  >
+                    Clear industry filter
+                  </button>
+                )}
+              </div>
+            </div>
           )}
         </div>
 
-        <div className="mt-3 text-xs text-neutral-500">
-          Tip: Click <span className="font-medium text-neutral-300">Generate Leads</span> then refresh to pull the newest CSV.
-        </div>
+        {/* Stats and Footer */}
+        {filtered.length > 0 && (
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div
+              className={`backdrop-blur-xl rounded-2xl p-6 transition-all duration-500 ${
+                dark
+                  ? "bg-slate-800/50 border-slate-700"
+                  : "bg-white/60 border-gray-200/50"
+              }`}
+            >
+              <div className="flex items-center space-x-4">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center">
+                  <span className="text-white font-bold">📊</span>
+                </div>
+                <div>
+                  <div
+                    className={`text-2xl font-bold ${
+                      dark ? "text-white" : "text-gray-900"
+                    }`}
+                  >
+                    {filtered.length.toLocaleString()}
+                  </div>
+                  <div
+                    className={`text-sm ${
+                      dark ? "text-gray-400" : "text-gray-600"
+                    }`}
+                  >
+                    Total Leads
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div
+              className={`backdrop-blur-xl rounded-2xl p-6 transition-all duration-500 ${
+                dark
+                  ? "bg-slate-800/50 border-slate-700"
+                  : "bg-white/60 border-gray-200/50"
+              }`}
+            >
+              <div className="flex items-center space-x-4">
+                <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-teal-500 rounded-xl flex items-center justify-center">
+                  <span className="text-white font-bold">🏢</span>
+                </div>
+                <div>
+                  <div
+                    className={`text-2xl font-bold ${
+                      dark ? "text-white" : "text-gray-900"
+                    }`}
+                  >
+                    {industries.length}
+                  </div>
+                  <div
+                    className={`text-sm ${
+                      dark ? "text-gray-400" : "text-gray-600"
+                    }`}
+                  >
+                    Industries
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div
+              className={`backdrop-blur-xl rounded-2xl p-6 transition-all duration-500 ${
+                dark
+                  ? "bg-slate-800/50 border-slate-700"
+                  : "bg-white/60 border-gray-200/50"
+              }`}
+            >
+              <div className="flex items-center space-x-4">
+                <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center">
+                  <span className="text-white font-bold">🕒</span>
+                </div>
+                <div>
+                  <div
+                    className={`text-2xl font-bold ${
+                      dark ? "text-white" : "text-gray-900"
+                    }`}
+                  >
+                    Live
+                  </div>
+                  <div
+                    className={`text-sm ${
+                      dark ? "text-gray-400" : "text-gray-600"
+                    }`}
+                  >
+                    Real-time Data
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -317,24 +921,30 @@ function LeadsDashboard({ onLogout }) {
 
 /* ---------- App wrapper (auth gate) ---------- */
 export default function App() {
-  const [user, setUser] = useState(null);
-  const [checking, setChecking] = useState(true);
+  // const [user, setUser] = useState(null);
+  // const [checking, setChecking] = useState(true);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch(`${BACKEND_URL}/auth/me`, { credentials: "include" });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.authenticated) setUser(data.user);
-        }
-      } finally {
-        setChecking(false);
-      }
-    })();
-  }, []);
+  // useEffect(() => {
+  //   (async () => {
+  //     try {
+  //       const res = await fetch(`${BACKEND_URL}/auth/me`, {
+  //         credentials: "include",
+  //       });
+  //       if (res.ok) {
+  //         const data = await res.json();
+  //         if (data.authenticated) setUser(data.user);
+  //       }
+  //     } finally {
+  //       setChecking(false);
+  //     }
+  //   })();
+  // }, []);
 
-  if (checking) return null;
-  if (!user) return <Login onLogin={setUser} />;
-  return <LeadsDashboard onLogout={() => (window.location.href = window.location.href)} />;
+  // if (checking) return null;
+  // if (!user) return <Login onLogin={setUser} />;
+  return (
+    <LeadsDashboard
+      onLogout={() => (window.location.href = window.location.href)}
+    />
+  );
 }
